@@ -1,0 +1,9 @@
+# Archivos de configuración con contraseñas (NUNCA SUBIR)
+.env
+
+# Carpetas pesadas que se descargan solas
+node_modules/
+
+# Archivos de log
+npm-debug.log
+.DS_Store

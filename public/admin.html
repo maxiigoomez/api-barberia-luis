@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barbería Luis - CRM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Inter:wght@300;400;600&display=swap');
+        :root { --neon-gold: #D4AF37; --dark-bg: #0a0a0a; --card-bg: #161616; }
+        body { background-color: var(--dark-bg); color: #e0e0e0; font-family: 'Inter', sans-serif; }
+        .font-disruptive { font-family: 'Syncopate', sans-serif; text-transform: uppercase; letter-spacing: 2px; }
+        .neon-border { box-shadow: 0 0 10px rgba(212, 175, 55, 0.1); border: 1px solid rgba(212, 175, 55, 0.3); }
+        .glass-card { background: rgba(22, 22, 22, 0.8); backdrop-filter: blur(10px); border-radius: 24px; }
+        .nav-item.active { color: var(--neon-gold); transform: translateY(-5px); }
+        .animate-fadeIn { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* Ocultar scrollbar */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="pb-24">
+
+    <header class="p-6 pt-8">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="font-disruptive text-2xl text-white">Luis</h1>
+                <p class="text-[10px] text-gray-500 tracking-widest uppercase">Barber Studio</p>
+            </div>
+            <button onclick="fetchData()" class="text-[#D4AF37] text-xl"><i class="fas fa-sync-alt"></i></button>
+            <button onclick="openBookingModal()" class="w-10 h-10 rounded-full bg-[#D4AF37] text-black flex items-center justify-center shadow-[0_0_15px_rgba(212,175,55,0.4)]">
+    <i class="fas fa-plus"></i>
+</button>
+        </div>
+    </header>
+
+    <main id="app-content" class="px-4 space-y-6">
+        </main>
+
+    <nav class="fixed bottom-6 left-4 right-4 h-18 glass-card border border-white/10 flex items-center justify-around px-6 py-4 z-50 shadow-2xl">
+        <button onclick="router('dashboard')" class="nav-item transition-all duration-300 flex flex-col items-center gap-1">
+            <i class="fas fa-chart-pie text-xl"></i>
+            <span class="text-[10px] uppercase font-bold">Hoy</span>
+        </button>
+        <button onclick="router('agenda')" class="nav-item transition-all duration-300 flex flex-col items-center gap-1">
+            <i class="fas fa-calendar-alt text-xl"></i>
+            <span class="text-[10px] uppercase font-bold">Agenda</span>
+        </button>
+        <button onclick="router('settings')" class="nav-item transition-all duration-300 flex flex-col items-center gap-1">
+            <i class="fas fa-clock text-xl"></i>
+            <span class="text-[10px] uppercase font-bold">Horarios</span>
+        </button>
+    </nav>
+
+    <script>
+        const API_URL = window.location.origin;
+        
+        // Inicializamos todo el estado junto para evitar errores
+        let appState = { 
+            view: 'dashboard', 
+            appointments: [], 
+            revenue: 0,
+            weeklyAppts: [],
+            config: { weekly: [], special: [] }
+        };
+
+        
+            async function fetchData() {
+    // Esta forma obtiene YYYY-MM-DD en el horario local del navegador
+    const ahora = new Date();
+    const hoy = ahora.getFullYear() + '-' + 
+                String(ahora.getMonth() + 1).padStart(2, '0') + '-' + 
+                String(ahora.getDate()).padStart(2, '0');
+    
+    try {
+        const resResumen = await fetch(`${API_URL}/crm/resumen?fecha=${hoy}`);
+        // ... resto del código
+                const dataResumen = await resResumen.json();
+                appState.appointments = dataResumen.hoy.turnos;
+                appState.revenue = dataResumen.hoy.total_recaudado;
+
+                // 2. Datos de la Semana
+                const resSemana = await fetch(`${API_URL}/crm/semana`);
+                appState.weeklyAppts = await resSemana.json();
+
+                // 3. Configuración de Horarios
+                const resConfig = await fetch(`${API_URL}/crm/horarios`);
+                const config = await resConfig.json();
+                appState.config.weekly = config.semanales;
+                appState.config.special = config.especiales;
+
+                render();
+            } catch (err) { console.error("Error cargando datos:", err); }
+        }
+
+        // --- VISTAS ---
+
+        function Dashboard() {
+            return `
+                <div class="animate-fadeIn">
+                    <div class="glass-card p-6 neon-border mb-6">
+                        <h2 class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">Recaudación Hoy</h2>
+                        <span class="text-4xl font-disruptive text-white">$${Number(appState.revenue).toLocaleString()}</span>
+                    </div>
+                    <h3 class="font-disruptive text-sm mb-4">Turnos de Hoy</h3>
+                    <div class="space-y-4">
+                        ${appState.appointments.length === 0 ? '<p class="text-gray-500 text-center py-10 uppercase text-xs">Sin turnos agendados.</p>' : 
+                        appState.appointments.map(a => `
+                            <div class="glass-card p-4 flex items-center justify-between border border-white/5">
+                                <div class="flex gap-4 items-center">
+                                    <div class="text-center bg-white/5 rounded-xl p-2 min-w-[60px]">
+                                        <p class="text-white font-disruptive text-xs">${new Date(a.fecha_inicio).toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'})}</p>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-white font-bold text-sm uppercase">${a.nombre}</h4>
+                                        <p class="text-[10px] text-[#D4AF37] uppercase">${a.servicio}</p>
+                                    </div>
+                                </div>
+                                <a href="https://wa.me/${a.telefono}" class="w-10 h-10 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center border border-green-500/20">
+                                    <i class="fab fa-whatsapp"></i>
+                                </a>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+        }
+
+        function Agenda() {
+            const dias = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+            return `
+                <div class="animate-fadeIn pb-10">
+                    <h2 class="font-disruptive text-sm mb-6 text-[#D4AF37]">Próximos en la Semana</h2>
+                    <div class="space-y-4">
+                        ${appState.weeklyAppts.length === 0 ? '<p class="text-gray-600 text-center py-10 uppercase text-xs">No hay turnos agendados.</p>' : 
+                        appState.weeklyAppts.map(a => {
+                            const d = new Date(a.fecha_inicio);
+                            return `
+                            <div class="glass-card p-4 border border-white/5 flex gap-4 items-center">
+                                <div class="text-center bg-[#D4AF37]/10 rounded-lg p-2 min-w-[50px]">
+                                    <p class="text-[9px] text-[#D4AF37] font-bold uppercase">${dias[d.getDay()]}</p>
+                                    <p class="text-white font-disruptive text-xs">${d.getDate()}</p>
+                                </div>
+                                <div>
+                                    <h4 class="text-white font-bold text-sm uppercase">${a.nombre}</h4>
+                                    <p class="text-[10px] text-gray-500 uppercase">${d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'})} - ${a.servicio}</p>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+        }
+
+        function Settings() {
+            const diasNombre = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+            return `
+                <div class="animate-fadeIn pb-20">
+                    <h2 class="font-disruptive text-sm mb-6">Horarios Semanales</h2>
+                    <div class="glass-card p-4 space-y-4 mb-10">
+                        ${appState.config.weekly.map(h => `
+                            <div class="flex flex-col gap-2 pb-4 border-b border-white/5 last:border-0">
+                                <span class="text-[10px] font-bold text-[#D4AF37] uppercase">${diasNombre[h.dia_semana]}</span>
+                                <div class="flex gap-2">
+                                    <input type="time" value="${h.hora_apertura}" onchange="updateWeekly(${h.dia_semana}, this.value, null)" class="bg-white/5 border border-white/10 rounded-lg p-3 text-white text-xs flex-1 outline-none focus:border-[#D4AF37]">
+                                    <input type="time" value="${h.hora_cierre}" onchange="updateWeekly(${h.dia_semana}, null, this.value)" class="bg-white/5 border border-white/10 rounded-lg p-3 text-white text-xs flex-1 outline-none focus:border-[#D4AF37]">
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-disruptive text-sm uppercase">Días Especiales</h2>
+                        <button onclick="addSpecial()" class="bg-[#D4AF37] text-black text-[10px] px-4 py-2 rounded-full font-bold uppercase">Agregar</button>
+                    </div>
+                    <div class="space-y-3">
+                        ${appState.config.special.map(s => `
+                            <div class="glass-card p-4 border border-[#D4AF37]/20 flex justify-between items-center">
+                                <div>
+                                    <p class="text-white text-xs font-bold">${new Date(s.fecha).toLocaleDateString('es-UY')}</p>
+                                    <p class="text-[10px] text-gray-500 uppercase">${s.esta_cerrado ? 'CERRADO' : s.hora_apertura + ' - ' + s.hora_cierre}</p>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+        }
+
+        // --- MOTOR DE NAVEGACIÓN Y RENDER ---
+
+        function router(view) { 
+            appState.view = view; 
+            render(); 
+            updateNav(); 
+        }
+
+        function updateNav() {
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                const text = btn.innerText.toUpperCase();
+                btn.classList.remove('active');
+                if (appState.view === 'dashboard' && text.includes('HOY')) btn.classList.add('active');
+                if (appState.view === 'agenda' && text.includes('AGENDA')) btn.classList.add('active');
+                if (appState.view === 'settings' && text.includes('HORARIOS')) btn.classList.add('active');
+            });
+        }
+
+        function render() {
+            const container = document.getElementById('app-content');
+            if (appState.view === 'dashboard') container.innerHTML = Dashboard();
+            else if (appState.view === 'agenda') container.innerHTML = Agenda();
+            else if (appState.view === 'settings') container.innerHTML = Settings();
+        }
+
+        // --- ACCIONES API ---
+
+        async function updateWeekly(dia, apertura, cierre) {
+            const current = appState.config.weekly.find(h => h.dia_semana === dia);
+            const data = {
+                dia_semana: dia,
+                apertura: apertura || current.hora_apertura,
+                cierre: cierre || current.hora_cierre
+            };
+            await fetch(`${API_URL}/crm/horarios-semanales`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        }
+
+        // --- LOGICA DEL MODAL ---
+
+function addSpecial() {
+    // Limpiamos los campos antes de abrir
+    document.getElementById('special-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('special-closed').checked = false;
+    document.getElementById('special-hours-container').style.opacity = "1";
+    
+    // Mostramos el modal
+    document.getElementById('modal-especial').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('modal-especial').classList.add('hidden');
+}
+
+function toggleHoursDisplay() {
+    const isClosed = document.getElementById('special-closed').checked;
+    const container = document.getElementById('special-hours-container');
+    container.style.opacity = isClosed ? "0.2" : "1";
+    container.style.pointerEvents = isClosed ? "none" : "auto";
+}
+
+async function submitSpecial() {
+    const fecha = document.getElementById('special-date').value;
+    const cerrado = document.getElementById('special-closed').checked;
+    const apertura = document.getElementById('special-open').value;
+    const cierre = document.getElementById('special-close').value;
+
+    if (!fecha) return alert("Por favor selecciona una fecha.");
+
+    try {
+        const response = await fetch(`${API_URL}/crm/horarios-especiales`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                fecha, 
+                apertura: cerrado ? null : apertura, 
+                cierre: cerrado ? null : cierre, 
+                cerrado 
+            })
+        });
+
+        if (response.ok) {
+            closeModal();
+            fetchData(); // Refrescamos los datos del dashboard
+        }
+    } catch (err) {
+        console.error("Error al guardar excepción:", err);
+    }
+}
+// Abrir el modal y cargar servicios si no están cargados
+async function openBookingModal() {
+    // 1. Cargamos los servicios para el select
+    try {
+        const res = await fetch(`${API_URL}/servicios`);
+        const servicios = await res.json();
+        const select = document.getElementById('new-service');
+        select.innerHTML = servicios.map(s => `<option value="${s.id}">${s.nombre} (${s.duracion_minutos}m)</option>`).join('');
+    } catch (e) { console.error("Error cargando servicios"); }
+
+    // 2. Seteamos fecha de hoy por defecto
+    document.getElementById('new-date').value = new Date().toISOString().split('T')[0];
+    
+    document.getElementById('modal-agendar').classList.remove('hidden');
+}
+
+function closeBookingModal() {
+    document.getElementById('modal-agendar').classList.add('hidden');
+}
+
+async function submitBooking() {
+    const nombre = document.getElementById('new-name').value;
+    const telefono = document.getElementById('new-phone').value;
+    const servicio_id = document.getElementById('new-service').value;
+    const fecha = document.getElementById('new-date').value;
+    const hora = document.getElementById('new-time').value;
+
+    if (!nombre || !telefono || !hora) return alert("Completa todos los datos.");
+
+    // Formateamos la fecha para que la API la entienda (ISO con zona horaria)
+    const fecha_inicio = `${fecha}T${hora}:00-03:00`;
+
+    try {
+        const response = await fetch(`${API_URL}/agendar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ telefono, nombre, fecha_inicio, servicio_id })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            alert(`¡Turno agendado! Código: ${result.codigo_seguimiento}`);
+            closeBookingModal();
+            fetchData(); // Refresca el dashboard
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (err) {
+        alert("No se pudo conectar con el servidor.");
+    }
+}
+
+        window.onload = () => { fetchData(); router('dashboard'); };
+    </script>
+    <div id="modal-especial" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-sm p-8 neon-border animate-fadeIn">
+        <h2 class="font-disruptive text-lg mb-6 text-white">Configurar Fecha</h2>
+        
+        <div class="space-y-6">
+            <div>
+                <label class="text-[10px] font-bold text-[#D4AF37] uppercase mb-2 block">Seleccionar Día</label>
+                <input type="date" id="special-date" class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-[#D4AF37]">
+            </div>
+
+            <div class="flex items-center justify-between bg-white/5 p-4 rounded-xl border border-white/5">
+                <span class="text-xs font-bold uppercase">¿Estará Cerrado?</span>
+                <input type="checkbox" id="special-closed" onchange="toggleHoursDisplay()" class="w-6 h-6 accent-[#D4AF37]">
+            </div>
+
+            <div id="special-hours-container" class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase mb-2 block">Apertura</label>
+                    <input type="time" id="special-open" value="09:00" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs outline-none">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase mb-2 block">Cierre</label>
+                    <input type="time" id="special-close" value="18:00" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs outline-none">
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-4">
+                <button onclick="closeModal()" class="flex-1 py-4 text-xs font-bold uppercase text-gray-400">Cancelar</button>
+                <button onclick="submitSpecial()" class="flex-1 bg-[#D4AF37] text-black py-4 rounded-xl font-bold uppercase text-xs shadow-[0_0_15px_rgba(212,175,55,0.3)]">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="modal-agendar" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[110] hidden flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-sm p-8 neon-border animate-fadeIn max-h-[90vh] overflow-y-auto no-scrollbar">
+        <h2 class="font-disruptive text-lg mb-6 text-white text-center">Nuevo Turno</h2>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="text-[10px] font-bold text-[#D4AF37] uppercase mb-1 block">Nombre</label>
+                <input type="text" id="new-name" placeholder="Ej: Juan Pérez" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-[#D4AF37]">
+            </div>
+            <div>
+                <label class="text-[10px] font-bold text-[#D4AF37] uppercase mb-1 block">Celular</label>
+                <input type="tel" id="new-phone" placeholder="Ej: 099123456" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-[#D4AF37]">
+            </div>
+
+            <div>
+                <label class="text-[10px] font-bold text-[#D4AF37] uppercase mb-1 block">Servicio</label>
+                <select id="new-service" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm outline-none appearance-none focus:border-[#D4AF37]">
+                    </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Fecha</label>
+                    <input type="date" id="new-date" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs outline-none">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Hora</label>
+                    <input type="time" id="new-time" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs outline-none">
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-6">
+                <button onclick="closeBookingModal()" class="flex-1 py-3 text-xs font-bold uppercase text-gray-400">Cerrar</button>
+                <button onclick="submitBooking()" class="flex-1 bg-white text-black py-3 rounded-xl font-bold uppercase text-xs">Agendar</button>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
