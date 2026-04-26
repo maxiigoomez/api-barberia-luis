@@ -284,17 +284,85 @@ async function openBookingModal() {
         const res = await fetch(`${API_URL}/servicios`);
         const servicios = await res.json();
         const select = document.getElementById('new-service');
-        select.innerHTML = servicios.map(s => `<option value="${s.id}">${s.nombre} (${s.duracion_minutos}m)</option>`).join('');
+        select.innerHTML = servicios.map(s => `<option value="${s.id}" data-duracion="${s.duracion_minutos}">${s.nombre} (${s.duracion_minutos}m)</option>`).join('');
     } catch (e) { console.error("Error cargando servicios"); }
 
-    // 2. Seteamos fecha de hoy por defecto
+    // 2. Seteamos fecha de hoy y reseteamos slots
     document.getElementById('new-date').value = new Date().toISOString().split('T')[0];
-    
+    document.getElementById('new-time').value = '';
+    document.getElementById('slots-container').innerHTML = '<p class="text-gray-600 text-xs text-center py-2">Seleccioná una fecha para ver los horarios.</p>';
+
     document.getElementById('modal-agendar').classList.remove('hidden');
 }
 
 function closeBookingModal() {
     document.getElementById('modal-agendar').classList.add('hidden');
+}
+
+async function loadAvailableSlots() {
+    const fecha = document.getElementById('new-date').value;
+    const container = document.getElementById('slots-container');
+    document.getElementById('new-time').value = '';
+
+    if (!fecha) {
+        container.innerHTML = '<p class="text-gray-600 text-xs text-center py-2">Seleccioná una fecha.</p>';
+        return;
+    }
+
+    container.innerHTML = '<p class="text-gray-500 text-xs text-center py-2 animate-pulse">Cargando horarios...</p>';
+
+    try {
+        const res = await fetch(`${API_URL}/disponibilidad?fecha=${fecha}`);
+        const data = await res.json();
+
+        if (!data.horario_atencion) {
+            container.innerHTML = '<p class="text-red-400 text-xs text-center py-2">Día no laborable o sin horario configurado.</p>';
+            return;
+        }
+
+        const servicioSelect = document.getElementById('new-service');
+        const duracion = parseInt(servicioSelect.options[servicioSelect.selectedIndex]?.dataset?.duracion || 30);
+        const ocupados = new Set(data.turnos_ocupados);
+        const slots = generateSlots(data.horario_atencion.apertura, data.horario_atencion.cierre, duracion, ocupados);
+
+        if (slots.length === 0) {
+            container.innerHTML = '<p class="text-gray-600 text-xs text-center py-2">Sin horarios disponibles para este día.</p>';
+            return;
+        }
+
+        container.innerHTML = `<div class="grid grid-cols-3 gap-2">${slots.map(slot => `
+            <button type="button" onclick="selectSlot('${slot.hora}', this)" ${slot.ocupado ? 'disabled' : ''}
+                class="slot-btn py-2 text-xs font-bold rounded-lg border transition-all
+                ${slot.ocupado ? 'border-white/5 text-gray-600 bg-transparent cursor-not-allowed line-through' : 'border-white/10 text-white bg-white/5 hover:border-[#D4AF37] hover:text-[#D4AF37] cursor-pointer'}">
+                ${slot.hora}
+            </button>`).join('')}</div>`;
+
+    } catch (err) {
+        container.innerHTML = '<p class="text-red-400 text-xs text-center py-2">Error al cargar horarios.</p>';
+    }
+}
+
+function generateSlots(apertura, cierre, duracionMin, ocupados) {
+    const [aH, aM] = apertura.split(':').map(Number);
+    const [cH, cM] = cierre.split(':').map(Number);
+    const startMin = aH * 60 + aM;
+    const endMin = cH * 60 + cM;
+    const slots = [];
+    for (let m = startMin; m + duracionMin <= endMin; m += duracionMin) {
+        const hora = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+        slots.push({ hora, ocupado: ocupados.has(hora) });
+    }
+    return slots;
+}
+
+function selectSlot(hora, btn) {
+    document.querySelectorAll('.slot-btn').forEach(b => {
+        b.classList.remove('bg-[#D4AF37]', 'text-black', 'border-[#D4AF37]');
+        if (!b.disabled) b.classList.add('border-white/10', 'text-white', 'bg-white/5');
+    });
+    btn.classList.remove('border-white/10', 'text-white', 'bg-white/5');
+    btn.classList.add('bg-[#D4AF37]', 'text-black', 'border-[#D4AF37]');
+    document.getElementById('new-time').value = hora;
 }
 
 async function submitBooking() {
@@ -381,19 +449,21 @@ async function submitBooking() {
 
             <div>
                 <label class="text-[10px] font-bold text-[#D4AF37] uppercase mb-1 block">Servicio</label>
-                <select id="new-service" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm outline-none appearance-none focus:border-[#D4AF37]">
+                <select id="new-service" onchange="loadAvailableSlots()" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm outline-none appearance-none focus:border-[#D4AF37]">
                     </select>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Fecha</label>
-                    <input type="date" id="new-date" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs outline-none">
+            <div>
+                <label class="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Fecha</label>
+                <input type="date" id="new-date" onchange="loadAvailableSlots()" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs outline-none focus:border-[#D4AF37]">
+            </div>
+
+            <div>
+                <label class="text-[10px] font-bold text-[#D4AF37] uppercase mb-2 block">Horario Disponible</label>
+                <div id="slots-container" class="min-h-[56px] flex items-center justify-center">
+                    <p class="text-gray-600 text-xs text-center py-2">Seleccioná una fecha para ver los horarios.</p>
                 </div>
-                <div>
-                    <label class="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Hora</label>
-                    <input type="time" id="new-time" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs outline-none">
-                </div>
+                <input type="hidden" id="new-time">
             </div>
 
             <div class="flex gap-3 pt-6">
