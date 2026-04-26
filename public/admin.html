@@ -18,6 +18,11 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         /* Ocultar scrollbar */
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        /* Select options legibles en todos los navegadores */
+        select option { background-color: #1a1a1a; color: #e0e0e0; }
+        /* Toast */
+        #toast { transition: opacity 0.3s ease, transform 0.3s ease; }
+        #toast.hide { opacity: 0; transform: translateY(20px); pointer-events: none; }
     </style>
 </head>
 <body class="pb-24">
@@ -381,9 +386,8 @@ async function submitBooking() {
     const fecha = document.getElementById('new-date').value;
     const hora = document.getElementById('new-time').value;
 
-    if (!nombre || !telefono || !hora) return alert("Completa todos los datos.");
+    if (!nombre || !telefono || !hora) return showToast("Completá todos los datos antes de agendar.", 'error');
 
-    // Formateamos la fecha para que la API la entienda (ISO con zona horaria)
     const fecha_inicio = `${fecha}T${hora}:00-03:00`;
 
     try {
@@ -396,18 +400,36 @@ async function submitBooking() {
         const result = await response.json();
 
         if (response.ok) {
-            alert(`¡Turno agendado! Código: ${result.codigo_seguimiento}`);
             closeBookingModal();
-            fetchData(); // Refresca el dashboard
+            fetchData();
+            showToast(`Turno agendado. Código: ${result.codigo_seguimiento}`);
         } else {
-            alert(`Error: ${result.error}`);
+            showToast(result.error, 'error');
         }
     } catch (err) {
-        alert("No se pudo conectar con el servidor.");
+        showToast("No se pudo conectar con el servidor.", 'error');
     }
 }
 
         window.onload = () => { fetchData(); router('dashboard'); };
+
+        let toastTimer;
+        function showToast(mensaje, tipo = 'success') {
+            const toast = document.getElementById('toast');
+            const icon  = document.getElementById('toast-icon');
+            const text  = document.getElementById('toast-text');
+
+            const esError = tipo === 'error';
+            toast.className = `fixed bottom-28 left-4 right-4 z-[200] flex items-center gap-3 p-4 rounded-2xl border shadow-2xl backdrop-blur-md
+                ${esError ? 'bg-red-900/60 border-red-500/30' : 'bg-[#1a1a1a]/90 border-[#D4AF37]/30'}`;
+            icon.className  = `text-lg ${esError ? 'text-red-400' : 'text-[#D4AF37]'}`;
+            icon.innerHTML  = esError ? '<i class="fas fa-times-circle"></i>' : '<i class="fas fa-check-circle"></i>';
+            text.textContent = mensaje;
+
+            toast.classList.remove('hide');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.add('hide'), 3500);
+        }
     </script>
     <div id="modal-especial" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
     <div class="glass-card w-full max-w-sm p-8 neon-border animate-fadeIn">
@@ -481,6 +503,11 @@ async function submitBooking() {
             </div>
         </div>
     </div>
+</div>
+
+<div id="toast" class="fixed bottom-28 left-4 right-4 z-[200] flex items-center gap-3 p-4 rounded-2xl border shadow-2xl backdrop-blur-md bg-[#1a1a1a]/90 border-[#D4AF37]/30 hide">
+    <span id="toast-icon" class="text-lg text-[#D4AF37]"><i class="fas fa-check-circle"></i></span>
+    <span id="toast-text" class="text-sm font-bold text-white flex-1"></span>
 </div>
 </body>
 </html>
