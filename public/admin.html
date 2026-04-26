@@ -110,7 +110,7 @@
                     </div>
                     <h3 class="font-disruptive text-sm mb-4">Turnos de Hoy</h3>
                     <div class="space-y-4">
-                        ${appState.appointments.length === 0 ? '<p class="text-gray-500 text-center py-10 uppercase text-xs">Sin turnos agendados.</p>' : 
+                        ${appState.appointments.length === 0 ? '<p class="text-gray-500 text-center py-10 uppercase text-xs">Sin turnos agendados.</p>' :
                         appState.appointments.map(a => `
                             <div class="glass-card p-4 flex items-center justify-between border border-white/5">
                                 <div class="flex gap-4 items-center">
@@ -122,9 +122,17 @@
                                         <p class="text-[10px] text-[#D4AF37] uppercase">${a.servicio}</p>
                                     </div>
                                 </div>
-                                <a href="https://wa.me/${a.telefono}" class="w-10 h-10 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center border border-green-500/20">
-                                    <i class="fab fa-whatsapp"></i>
-                                </a>
+                                <div class="flex gap-2">
+                                    <a href="https://wa.me/${a.telefono}" class="w-9 h-9 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center border border-green-500/20">
+                                        <i class="fab fa-whatsapp text-sm"></i>
+                                    </a>
+                                    <button onclick="openRescheduleModal('${a.codigo_seguimiento}','${a.telefono}',${a.duracion_minutos})" class="w-9 h-9 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                                        <i class="fas fa-calendar-alt text-sm"></i>
+                                    </button>
+                                    <button onclick="openCancelConfirm('${a.codigo_seguimiento}','${a.telefono}','${a.nombre}')" class="w-9 h-9 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center border border-red-500/20">
+                                        <i class="fas fa-times text-sm"></i>
+                                    </button>
+                                </div>
                             </div>
                         `).join('')}
                     </div>
@@ -141,14 +149,24 @@
                         appState.weeklyAppts.map(a => {
                             const d = new Date(a.fecha_inicio);
                             return `
-                            <div class="glass-card p-4 border border-white/5 flex gap-4 items-center">
-                                <div class="text-center bg-[#D4AF37]/10 rounded-lg p-2 min-w-[50px]">
-                                    <p class="text-[9px] text-[#D4AF37] font-bold uppercase">${dias[d.getDay()]}</p>
-                                    <p class="text-white font-disruptive text-xs">${d.getDate()}</p>
+                            <div class="glass-card p-4 border border-white/5 flex items-center justify-between gap-3">
+                                <div class="flex gap-3 items-center flex-1 min-w-0">
+                                    <div class="text-center bg-[#D4AF37]/10 rounded-lg p-2 min-w-[50px]">
+                                        <p class="text-[9px] text-[#D4AF37] font-bold uppercase">${dias[d.getDay()]}</p>
+                                        <p class="text-white font-disruptive text-xs">${d.getDate()}</p>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <h4 class="text-white font-bold text-sm uppercase truncate">${a.nombre}</h4>
+                                        <p class="text-[10px] text-gray-500 uppercase">${d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'})} · ${a.servicio}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h4 class="text-white font-bold text-sm uppercase">${a.nombre}</h4>
-                                    <p class="text-[10px] text-gray-500 uppercase">${d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'})} - ${a.servicio}</p>
+                                <div class="flex gap-2 shrink-0">
+                                    <button onclick="openRescheduleModal('${a.codigo_seguimiento}','${a.telefono}',${a.duracion_minutos})" class="w-9 h-9 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                                        <i class="fas fa-calendar-alt text-sm"></i>
+                                    </button>
+                                    <button onclick="openCancelConfirm('${a.codigo_seguimiento}','${a.telefono}','${a.nombre}')" class="w-9 h-9 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center border border-red-500/20">
+                                        <i class="fas fa-times text-sm"></i>
+                                    </button>
                                 </div>
                             </div>`;
                         }).join('')}
@@ -260,7 +278,7 @@ async function submitSpecial() {
     const apertura = document.getElementById('special-open').value;
     const cierre = document.getElementById('special-close').value;
 
-    if (!fecha) return alert("Por favor selecciona una fecha.");
+    if (!fecha) return showToast("Seleccioná una fecha.", 'error');
 
     try {
         const response = await fetch(`${API_URL}/crm/horarios-especiales`, {
@@ -411,6 +429,118 @@ async function submitBooking() {
     }
 }
 
+        // --- REAGENDAR Y CANCELAR ---
+
+        let rescheduleState = { codigo: null, telefono: null, duracion: 30 };
+
+        function openRescheduleModal(codigo, telefono, duracion) {
+            rescheduleState = { codigo, telefono, duracion };
+            const ahora = new Date();
+            document.getElementById('reschedule-date').value =
+                ahora.getFullYear() + '-' + String(ahora.getMonth()+1).padStart(2,'0') + '-' + String(ahora.getDate()).padStart(2,'0');
+            document.getElementById('reschedule-time').value = '';
+            document.getElementById('reschedule-slots').innerHTML = '<p class="text-gray-600 text-xs text-center py-2">Seleccioná una fecha para ver los horarios.</p>';
+            document.getElementById('modal-reagendar').classList.remove('hidden');
+        }
+
+        function closeRescheduleModal() {
+            document.getElementById('modal-reagendar').classList.add('hidden');
+        }
+
+        async function loadRescheduleSlots() {
+            const fecha = document.getElementById('reschedule-date').value;
+            const container = document.getElementById('reschedule-slots');
+            document.getElementById('reschedule-time').value = '';
+            if (!fecha) return;
+            container.innerHTML = '<p class="text-gray-500 text-xs text-center py-2 animate-pulse">Cargando horarios...</p>';
+            try {
+                const res = await fetch(`${API_URL}/disponibilidad?fecha=${fecha}`);
+                const data = await res.json();
+                if (!data.horario_atencion) {
+                    container.innerHTML = '<p class="text-red-400 text-xs text-center py-2">Día no laborable.</p>';
+                    return;
+                }
+                const slots = generateSlots(data.horario_atencion.apertura, data.horario_atencion.cierre, rescheduleState.duracion, data.turnos_ocupados);
+                if (slots.length === 0) {
+                    container.innerHTML = '<p class="text-gray-600 text-xs text-center py-2">Sin horarios disponibles.</p>';
+                    return;
+                }
+                container.innerHTML = `<div class="grid grid-cols-3 gap-2">${slots.map(slot => `
+                    <button type="button" onclick="selectRescheduleSlot('${slot.hora}', this)" ${slot.ocupado ? 'disabled' : ''}
+                        class="rslot-btn py-2 text-xs font-bold rounded-lg border transition-all
+                        ${slot.ocupado ? 'border-white/5 text-gray-600 bg-transparent cursor-not-allowed line-through' : 'border-white/10 text-white bg-white/5 hover:border-[#D4AF37] hover:text-[#D4AF37] cursor-pointer'}">
+                        ${slot.hora}
+                    </button>`).join('')}</div>`;
+            } catch (err) {
+                container.innerHTML = '<p class="text-red-400 text-xs text-center py-2">Error al cargar horarios.</p>';
+            }
+        }
+
+        function selectRescheduleSlot(hora, btn) {
+            document.querySelectorAll('.rslot-btn').forEach(b => {
+                b.classList.remove('bg-[#D4AF37]', 'text-black', 'border-[#D4AF37]');
+                if (!b.disabled) b.classList.add('border-white/10', 'text-white', 'bg-white/5');
+            });
+            btn.classList.remove('border-white/10', 'text-white', 'bg-white/5');
+            btn.classList.add('bg-[#D4AF37]', 'text-black', 'border-[#D4AF37]');
+            document.getElementById('reschedule-time').value = hora;
+        }
+
+        async function submitReschedule() {
+            const fecha = document.getElementById('reschedule-date').value;
+            const hora  = document.getElementById('reschedule-time').value;
+            if (!hora) return showToast('Seleccioná un horario disponible.', 'error');
+            const nueva_fecha_inicio = `${fecha}T${hora}:00-03:00`;
+            try {
+                const response = await fetch(`${API_URL}/reagendar`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ codigo_seguimiento: rescheduleState.codigo, telefono: rescheduleState.telefono, nueva_fecha_inicio })
+                });
+                const result = await response.json();
+                closeRescheduleModal();
+                if (response.ok) {
+                    showToast(`Reagendado para el ${result.detalle.nueva_fecha} a las ${result.detalle.nueva_hora}.`);
+                    fetchData();
+                } else {
+                    showToast(result.error, 'error');
+                }
+            } catch (err) {
+                showToast('No se pudo conectar con el servidor.', 'error');
+            }
+        }
+
+        function openCancelConfirm(codigo, telefono, nombre) {
+            rescheduleState.codigo   = codigo;
+            rescheduleState.telefono = telefono;
+            document.getElementById('cancel-nombre').textContent = nombre;
+            document.getElementById('modal-cancelar').classList.remove('hidden');
+        }
+
+        function closeCancelModal() {
+            document.getElementById('modal-cancelar').classList.add('hidden');
+        }
+
+        async function submitCancel() {
+            try {
+                const response = await fetch(`${API_URL}/cancelar`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ codigo_seguimiento: rescheduleState.codigo, telefono: rescheduleState.telefono })
+                });
+                const result = await response.json();
+                closeCancelModal();
+                if (response.ok) {
+                    showToast('Turno cancelado correctamente.');
+                    fetchData();
+                } else {
+                    showToast(result.error, 'error');
+                }
+            } catch (err) {
+                showToast('No se pudo conectar con el servidor.', 'error');
+            }
+        }
+
         window.onload = () => { fetchData(); router('dashboard'); };
 
         let toastTimer;
@@ -428,7 +558,7 @@ async function submitBooking() {
 
             toast.classList.remove('hide');
             clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => toast.classList.add('hide'), 3500);
+            toastTimer = setTimeout(() => toast.classList.add('hide'), 6000);
         }
     </script>
     <div id="modal-especial" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
@@ -501,6 +631,47 @@ async function submitBooking() {
                 <button onclick="closeBookingModal()" class="flex-1 py-3 text-xs font-bold uppercase text-gray-400">Cerrar</button>
                 <button onclick="submitBooking()" class="flex-1 bg-white text-black py-3 rounded-xl font-bold uppercase text-xs">Agendar</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Reagendar -->
+<div id="modal-reagendar" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[120] hidden flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-sm p-8 neon-border animate-fadeIn max-h-[90vh] overflow-y-auto no-scrollbar">
+        <h2 class="font-disruptive text-lg mb-6 text-white text-center">Reagendar</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Nueva Fecha</label>
+                <input type="date" id="reschedule-date" onchange="loadRescheduleSlots()" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs outline-none focus:border-[#D4AF37]">
+            </div>
+            <div>
+                <label class="text-[10px] font-bold text-[#D4AF37] uppercase mb-2 block">Horario Disponible</label>
+                <div id="reschedule-slots" class="min-h-[56px] flex items-center justify-center">
+                    <p class="text-gray-600 text-xs text-center py-2">Seleccioná una fecha para ver los horarios.</p>
+                </div>
+                <input type="hidden" id="reschedule-time">
+            </div>
+            <div class="flex gap-3 pt-4">
+                <button onclick="closeRescheduleModal()" class="flex-1 py-3 text-xs font-bold uppercase text-gray-400">Cerrar</button>
+                <button onclick="submitReschedule()" class="flex-1 bg-[#D4AF37] text-black py-3 rounded-xl font-bold uppercase text-xs">Confirmar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Cancelar -->
+<div id="modal-cancelar" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[120] hidden flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-sm p-8 neon-border animate-fadeIn">
+        <div class="text-center mb-6">
+            <div class="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-times text-red-400 text-2xl"></i>
+            </div>
+            <h2 class="font-disruptive text-sm text-white mb-2">Cancelar Turno</h2>
+            <p class="text-gray-400 text-xs">¿Confirmás la cancelación del turno de <span id="cancel-nombre" class="text-white font-bold"></span>?</p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="closeCancelModal()" class="flex-1 py-3 text-xs font-bold uppercase text-gray-400 border border-white/10 rounded-xl">No, volver</button>
+            <button onclick="submitCancel()" class="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold uppercase text-xs">Sí, cancelar</button>
         </div>
     </div>
 </div>

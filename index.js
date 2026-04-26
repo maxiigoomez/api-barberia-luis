@@ -450,12 +450,12 @@ app.get('/crm/resumen', async (req, res) => {
     try {
         // Cambiá la parte del WHERE en tu consulta de SQL a esto:
 const turnos = await pool.query(
-    `SELECT t.fecha_inicio, c.nombre, c.telefono, s.nombre as servicio, s.precio 
-     FROM turnos t 
-     JOIN clientes c ON t.cliente_id = c.id 
+    `SELECT t.fecha_inicio, t.codigo_seguimiento, c.nombre, c.telefono, s.nombre as servicio, s.precio, s.duracion_minutos
+     FROM turnos t
+     JOIN clientes c ON t.cliente_id = c.id
      JOIN servicios s ON t.servicio_id = s.id
-     WHERE (t.fecha_inicio AT TIME ZONE 'UTC' AT TIME ZONE 'America/Montevideo')::date = $1 
-     AND t.estado = 'confirmado' 
+     WHERE (t.fecha_inicio AT TIME ZONE 'UTC' AT TIME ZONE 'America/Montevideo')::date = $1
+     AND t.estado = 'confirmado'
      ORDER BY t.fecha_inicio ASC`, [fecha]);
 
         const ganancias = await pool.query(
@@ -520,9 +520,9 @@ app.get('/crm/semana', async (req, res) => {
         const fin = DateTime.now().setZone('America/Montevideo').endOf('week').toJSDate();
 
         const turnos = await pool.query(
-            `SELECT t.fecha_inicio, c.nombre, s.nombre as servicio
-             FROM turnos t 
-             JOIN clientes c ON t.cliente_id = c.id 
+            `SELECT t.fecha_inicio, t.codigo_seguimiento, c.nombre, c.telefono, s.nombre as servicio, s.duracion_minutos
+             FROM turnos t
+             JOIN clientes c ON t.cliente_id = c.id
              JOIN servicios s ON t.servicio_id = s.id
              WHERE t.fecha_inicio >= $1 AND t.fecha_inicio <= $2 AND t.estado = 'confirmado'
              ORDER BY t.fecha_inicio ASC`, [inicio, fin]);
