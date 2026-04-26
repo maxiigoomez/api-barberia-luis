@@ -322,8 +322,7 @@ async function loadAvailableSlots() {
 
         const servicioSelect = document.getElementById('new-service');
         const duracion = parseInt(servicioSelect.options[servicioSelect.selectedIndex]?.dataset?.duracion || 30);
-        const ocupados = new Set(data.turnos_ocupados);
-        const slots = generateSlots(data.horario_atencion.apertura, data.horario_atencion.cierre, duracion, ocupados);
+        const slots = generateSlots(data.horario_atencion.apertura, data.horario_atencion.cierre, duracion, data.turnos_ocupados);
 
         if (slots.length === 0) {
             container.innerHTML = '<p class="text-gray-600 text-xs text-center py-2">Sin horarios disponibles para este día.</p>';
@@ -342,15 +341,25 @@ async function loadAvailableSlots() {
     }
 }
 
+function timeToMin(hhmm) {
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+}
+
 function generateSlots(apertura, cierre, duracionMin, ocupados) {
-    const [aH, aM] = apertura.split(':').map(Number);
-    const [cH, cM] = cierre.split(':').map(Number);
-    const startMin = aH * 60 + aM;
-    const endMin = cH * 60 + cM;
+    const startMin = timeToMin(apertura);
+    const endMin   = timeToMin(cierre);
     const slots = [];
     for (let m = startMin; m + duracionMin <= endMin; m += duracionMin) {
+        const slotFin = m + duracionMin;
         const hora = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-        slots.push({ hora, ocupado: ocupados.has(hora) });
+        // Un slot está ocupado si se solapa con cualquier turno existente
+        const ocupado = ocupados.some(t => {
+            const tInicio = timeToMin(t.inicio);
+            const tFin    = timeToMin(t.fin);
+            return m < tFin && slotFin > tInicio;
+        });
+        slots.push({ hora, ocupado });
     }
     return slots;
 }

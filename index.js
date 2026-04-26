@@ -93,13 +93,16 @@ app.get('/disponibilidad', async (req, res) => {
 
         // B. Buscar turnos ya ocupados
         const ocupados = await pool.query(
-            "SELECT fecha_inicio FROM turnos WHERE fecha_inicio::date = $1 AND estado != 'cancelado'",
+            "SELECT fecha_inicio, fecha_fin FROM turnos WHERE fecha_inicio::date = $1 AND estado != 'cancelado'",
             [fecha]
         );
 
         res.json({
             horario_atencion: { apertura, cierre },
-            turnos_ocupados: ocupados.rows.map(t => DateTime.fromJSDate(t.fecha_inicio, { zone: 'America/Montevideo' }).toFormat('HH:mm'))
+            turnos_ocupados: ocupados.rows.map(t => ({
+                inicio: DateTime.fromJSDate(t.fecha_inicio, { zone: 'America/Montevideo' }).toFormat('HH:mm'),
+                fin:    DateTime.fromJSDate(t.fecha_fin,    { zone: 'America/Montevideo' }).toFormat('HH:mm')
+            }))
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
