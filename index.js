@@ -513,11 +513,15 @@ app.post('/crm/horarios-especiales', async (req, res) => {
     }
 });
 
-// D. Turnos de la semana (Resumen)
+// D. Turnos de las próximas 2 semanas desde el domingo
 app.get('/crm/semana', async (req, res) => {
     try {
-        const inicio = DateTime.now().setZone('America/Montevideo').startOf('week').toJSDate();
-        const fin = DateTime.now().setZone('America/Montevideo').endOf('week').toJSDate();
+        const hoy = DateTime.now().setZone('America/Montevideo');
+        // Luxon weekday: 1=Lun ... 7=Dom → restar (weekday % 7) para llegar al domingo
+        const diasHastaDomingo = hoy.weekday % 7;
+        const domingo = hoy.minus({ days: diasHastaDomingo }).startOf('day');
+        const inicio = domingo.toJSDate();
+        const fin = domingo.plus({ days: 13 }).endOf('day').toJSDate();
 
         const turnos = await pool.query(
             `SELECT t.fecha_inicio, t.codigo_seguimiento, c.nombre, c.telefono, s.nombre as servicio, s.duracion_minutos

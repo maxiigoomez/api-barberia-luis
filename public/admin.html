@@ -140,38 +140,103 @@
         }
 
         function Agenda() {
-            const dias = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+            const diasNombre = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+            const diasCorto  = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+            // Calcular el domingo de la semana actual
+            const hoy = new Date();
+            const diaSemana = hoy.getDay(); // 0=Dom
+            const domingo = new Date(hoy);
+            domingo.setDate(hoy.getDate() - diaSemana);
+            domingo.setHours(0, 0, 0, 0);
+
+            // 14 días (2 semanas)
+            const dias = [];
+            for (let i = 0; i < 14; i++) {
+                const d = new Date(domingo);
+                d.setDate(domingo.getDate() + i);
+                dias.push(d);
+            }
+
+            // Agrupar turnos por fecha local YYYY-MM-DD
+            const apptsByDay = {};
+            appState.weeklyAppts.forEach(a => {
+                const d = new Date(a.fecha_inicio);
+                const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+                if (!apptsByDay[key]) apptsByDay[key] = [];
+                apptsByDay[key].push(a);
+            });
+
+            const todayKey = hoy.getFullYear() + '-' + String(hoy.getMonth()+1).padStart(2,'0') + '-' + String(hoy.getDate()).padStart(2,'0');
+
             return `
                 <div class="animate-fadeIn pb-10">
-                    <h2 class="font-disruptive text-sm mb-6 text-[#D4AF37]">Próximos en la Semana</h2>
-                    <div class="space-y-4">
-                        ${appState.weeklyAppts.length === 0 ? '<p class="text-gray-600 text-center py-10 uppercase text-xs">No hay turnos agendados.</p>' : 
-                        appState.weeklyAppts.map(a => {
-                            const d = new Date(a.fecha_inicio);
+                    <h2 class="font-disruptive text-sm mb-6 text-[#D4AF37]">Próximas 2 Semanas</h2>
+                    <div class="space-y-2">
+                        ${dias.map((d, i) => {
+                            const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+                            const appts = apptsByDay[key] || [];
+                            const isToday = key === todayKey;
+                            const isOpen  = isToday;
+                            const dayId   = 'day-' + i;
                             return `
-                            <div class="glass-card p-4 border border-white/5 flex items-center justify-between gap-3">
-                                <div class="flex gap-3 items-center flex-1 min-w-0">
-                                    <div class="text-center bg-[#D4AF37]/10 rounded-lg p-2 min-w-[50px]">
-                                        <p class="text-[9px] text-[#D4AF37] font-bold uppercase">${dias[d.getDay()]}</p>
-                                        <p class="text-white font-disruptive text-xs">${d.getDate()}</p>
+                            <div class="glass-card border ${isToday ? 'border-[#D4AF37]/50' : 'border-white/5'} overflow-hidden">
+                                <button onclick="toggleDay('${dayId}')" class="w-full flex items-center justify-between p-4 text-left">
+                                    <div class="flex items-center gap-3">
+                                        <div class="text-center ${isToday ? 'bg-[#D4AF37]' : 'bg-white/5'} rounded-xl p-2 min-w-[48px]">
+                                            <p class="text-[9px] font-bold uppercase ${isToday ? 'text-black' : 'text-gray-400'}">${diasCorto[d.getDay()]}</p>
+                                            <p class="${isToday ? 'text-black' : 'text-white'} font-disruptive text-sm">${d.getDate()}</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-white font-bold text-xs uppercase">${diasNombre[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}</p>
+                                            <p class="text-[10px] ${appts.length > 0 ? 'text-[#D4AF37]' : 'text-gray-600'} uppercase">${appts.length === 0 ? 'Sin turnos' : appts.length + ' turno' + (appts.length !== 1 ? 's' : '')}</p>
+                                        </div>
                                     </div>
-                                    <div class="min-w-0">
-                                        <h4 class="text-white font-bold text-sm uppercase truncate">${a.nombre}</h4>
-                                        <p class="text-[10px] text-gray-500 uppercase">${d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'})} · ${a.servicio}</p>
-                                    </div>
-                                </div>
-                                <div class="flex gap-2 shrink-0">
-                                    <button onclick="openRescheduleModal('${a.codigo_seguimiento}','${a.telefono}',${a.duracion_minutos})" class="w-9 h-9 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
-                                        <i class="fas fa-calendar-alt text-sm"></i>
-                                    </button>
-                                    <button onclick="openCancelConfirm('${a.codigo_seguimiento}','${a.telefono}','${a.nombre}')" class="w-9 h-9 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center border border-red-500/20">
-                                        <i class="fas fa-times text-sm"></i>
-                                    </button>
+                                    <i id="${dayId}-icon" class="fas fa-chevron-${isOpen ? 'up' : 'down'} text-gray-500 text-xs"></i>
+                                </button>
+                                <div id="${dayId}" class="${isOpen ? '' : 'hidden'} px-4 pb-4 space-y-2">
+                                    ${appts.length === 0
+                                        ? '<p class="text-gray-600 text-[10px] text-center py-3 uppercase">Sin turnos para este día</p>'
+                                        : appts.map(a => {
+                                            const ad = new Date(a.fecha_inicio);
+                                            return `
+                                            <div class="bg-white/5 rounded-xl p-3 flex items-center justify-between gap-3">
+                                                <div class="flex gap-3 items-center flex-1 min-w-0">
+                                                    <div class="text-center bg-[#D4AF37]/10 rounded-lg p-2 min-w-[48px]">
+                                                        <p class="text-white font-disruptive text-xs">${ad.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'})}</p>
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <h4 class="text-white font-bold text-sm uppercase truncate">${a.nombre}</h4>
+                                                        <p class="text-[10px] text-gray-500 uppercase">${a.servicio}</p>
+                                                    </div>
+                                                </div>
+                                                <div class="flex gap-2 shrink-0">
+                                                    <a href="https://wa.me/${a.telefono}" class="w-8 h-8 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center border border-green-500/20">
+                                                        <i class="fab fa-whatsapp text-xs"></i>
+                                                    </a>
+                                                    <button onclick="openRescheduleModal('${a.codigo_seguimiento}','${a.telefono}',${a.duracion_minutos})" class="w-8 h-8 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                                                        <i class="fas fa-calendar-alt text-xs"></i>
+                                                    </button>
+                                                    <button onclick="openCancelConfirm('${a.codigo_seguimiento}','${a.telefono}','${a.nombre}')" class="w-8 h-8 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center border border-red-500/20">
+                                                        <i class="fas fa-times text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </div>`;
+                                          }).join('')
+                                    }
                                 </div>
                             </div>`;
                         }).join('')}
                     </div>
                 </div>`;
+        }
+
+        function toggleDay(id) {
+            const content = document.getElementById(id);
+            const icon    = document.getElementById(id + '-icon');
+            const hidden  = content.classList.toggle('hidden');
+            icon.classList.toggle('fa-chevron-up',   !hidden);
+            icon.classList.toggle('fa-chevron-down',  hidden);
         }
 
         function Settings() {
