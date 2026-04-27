@@ -264,7 +264,7 @@
                         ${appState.config.special.map(s => `
                             <div class="glass-card p-4 border border-[#D4AF37]/20 flex justify-between items-center">
                                 <div>
-                                    <p class="text-white text-xs font-bold">${new Date(s.fecha).toLocaleDateString('es-UY')}</p>
+                                    <p class="text-white text-xs font-bold">${(([y,m,d]) => `${parseInt(d)}/${parseInt(m)}/${y}`)(s.fecha.substring(0,10).split('-'))}</p>
                                     <p class="text-[10px] text-gray-500 uppercase">${s.esta_cerrado ? 'CERRADO' : s.hora_apertura + ' - ' + s.hora_cierre}</p>
                                 </div>
                             </div>
