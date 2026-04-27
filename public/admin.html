@@ -403,14 +403,14 @@ async function loadAvailableSlots() {
         const res = await fetch(`${API_URL}/disponibilidad?fecha=${fecha}`);
         const data = await res.json();
 
-        if (!data.horario_atencion) {
+        if (!data.franjas || data.franjas.length === 0) {
             container.innerHTML = '<p class="text-red-400 text-xs text-center py-2">Día no laborable o sin horario configurado.</p>';
             return;
         }
 
         const servicioSelect = document.getElementById('new-service');
         const duracion = parseInt(servicioSelect.options[servicioSelect.selectedIndex]?.dataset?.duracion || 30);
-        const slots = generateSlots(data.horario_atencion.apertura, data.horario_atencion.cierre, duracion, data.turnos_ocupados);
+        const slots = data.franjas.flatMap(f => generateSlots(f.apertura, f.cierre, duracion, data.turnos_ocupados));
 
         if (slots.length === 0) {
             container.innerHTML = '<p class="text-gray-600 text-xs text-center py-2">Sin horarios disponibles para este día.</p>';
@@ -521,11 +521,11 @@ async function submitBooking() {
             try {
                 const res = await fetch(`${API_URL}/disponibilidad?fecha=${fecha}`);
                 const data = await res.json();
-                if (!data.horario_atencion) {
+                if (!data.franjas || data.franjas.length === 0) {
                     container.innerHTML = '<p class="text-red-400 text-xs text-center py-2">Día no laborable.</p>';
                     return;
                 }
-                const slots = generateSlots(data.horario_atencion.apertura, data.horario_atencion.cierre, rescheduleState.duracion, data.turnos_ocupados);
+                const slots = data.franjas.flatMap(f => generateSlots(f.apertura, f.cierre, rescheduleState.duracion, data.turnos_ocupados));
                 if (slots.length === 0) {
                     container.innerHTML = '<p class="text-gray-600 text-xs text-center py-2">Sin horarios disponibles.</p>';
                     return;

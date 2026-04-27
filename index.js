@@ -76,19 +76,20 @@ app.get('/disponibilidad', async (req, res) => {
         const fechaConsulta = DateTime.fromISO(fecha, { zone: 'America/Montevideo' });
         const diaSemana = fechaConsulta.weekday % 7; // Ajuste para 0=Domingo, 1=Lunes...
 
-        // A. Buscar horario laboral (Especial o Semanal)
+        // A. Buscar horario laboral (Especial o Semanal) — soporta franjas múltiples (horario cortado)
         const especial = await pool.query('SELECT * FROM horarios_especiales WHERE fecha = $1', [fecha]);
-        let apertura, cierre;
+        let franjas = [];
 
         if (especial.rows.length > 0) {
-            if (especial.rows[0].esta_cerrado) return res.json({ libre: [] });
-            apertura = especial.rows[0].hora_apertura;
-            cierre = especial.rows[0].hora_cierre;
+            if (especial.rows[0].esta_cerrado) return res.json({ franjas: [], turnos_ocupados: [] });
+            franjas = [{ apertura: especial.rows[0].hora_apertura, cierre: especial.rows[0].hora_cierre }];
         } else {
-            const semanal = await pool.query('SELECT * FROM horarios_semanales WHERE dia_semana = $1', [diaSemana]);
-            if (semanal.rows.length === 0) return res.json({ libre: [] });
-            apertura = semanal.rows[0].hora_apertura;
-            cierre = semanal.rows[0].hora_cierre;
+            const semanal = await pool.query(
+                'SELECT hora_apertura, hora_cierre FROM horarios_semanales WHERE dia_semana = $1 ORDER BY hora_apertura ASC',
+                [diaSemana]
+            );
+            if (semanal.rows.length === 0) return res.json({ franjas: [], turnos_ocupados: [] });
+            franjas = semanal.rows.map(r => ({ apertura: r.hora_apertura, cierre: r.hora_cierre }));
         }
 
         // B. Buscar turnos ya ocupados
@@ -98,7 +99,7 @@ app.get('/disponibilidad', async (req, res) => {
         );
 
         res.json({
-            horario_atencion: { apertura, cierre },
+            franjas,
             turnos_ocupados: ocupados.rows.map(t => ({
                 inicio: DateTime.fromJSDate(t.fecha_inicio, { zone: 'America/Montevideo' }).toFormat('HH:mm'),
                 fin:    DateTime.fromJSDate(t.fecha_fin,    { zone: 'America/Montevideo' }).toFormat('HH:mm')
@@ -137,29 +138,32 @@ app.post('/agendar', async (req, res) => {
 
         // --- VALIDACIÓN 1: ¿ESTÁ DENTRO DEL HORARIO LABORAL? ---
         
-        // Buscamos si hay horario especial o semanal
+        // Buscamos si hay horario especial o semanal — soporta franjas múltiples (horario cortado)
         const especial = await pool.query('SELECT * FROM horarios_especiales WHERE fecha = $1', [fechaSolo]);
-        let apertura, cierre;
+        let franjas = [];
 
         if (especial.rows.length > 0) {
             if (especial.rows[0].esta_cerrado) return res.status(403).json({ error: 'La barbería está cerrada este día.' });
-            apertura = especial.rows[0].hora_apertura;
-            cierre = especial.rows[0].hora_cierre;
+            franjas = [{ apertura: especial.rows[0].hora_apertura, cierre: especial.rows[0].hora_cierre }];
         } else {
-            const semanal = await pool.query('SELECT * FROM horarios_semanales WHERE dia_semana = $1', [diaSemana]);
+            const semanal = await pool.query(
+                'SELECT hora_apertura, hora_cierre FROM horarios_semanales WHERE dia_semana = $1 ORDER BY hora_apertura ASC',
+                [diaSemana]
+            );
             if (semanal.rows.length === 0) return res.status(403).json({ error: 'El barbero no trabaja este día.' });
-            apertura = semanal.rows[0].hora_apertura;
-            cierre = semanal.rows[0].hora_cierre;
+            franjas = semanal.rows.map(r => ({ apertura: r.hora_apertura, cierre: r.hora_cierre }));
         }
 
-        // Convertimos apertura/cierre (strings de la DB) a objetos DateTime para comparar
-        const aperturaDT = DateTime.fromISO(`${fechaSolo}T${apertura}`, { zone: 'America/Montevideo' });
-        const cierreDT = DateTime.fromISO(`${fechaSolo}T${cierre}`, { zone: 'America/Montevideo' });
+        // Verificar que el turno propuesto caiga dentro de alguna franja
+        const dentroDeFranja = franjas.some(f => {
+            const aperturaDT = DateTime.fromISO(`${fechaSolo}T${f.apertura}`, { zone: 'America/Montevideo' });
+            const cierreDT   = DateTime.fromISO(`${fechaSolo}T${f.cierre}`,   { zone: 'America/Montevideo' });
+            return inicioPropuesto >= aperturaDT && finPropuesto <= cierreDT;
+        });
 
-        if (inicioPropuesto < aperturaDT || finPropuesto > cierreDT) {
-            return res.status(400).json({ 
-                error: `Horario fuera de jornada. El horario para este día es de ${apertura.substring(0,5)} a ${cierre.substring(0,5)}.` 
-            });
+        if (!dentroDeFranja) {
+            const franjaStr = franjas.map(f => `${f.apertura.substring(0,5)}-${f.cierre.substring(0,5)}`).join(' y ');
+            return res.status(400).json({ error: `Horario fuera de jornada. Franjas: ${franjaStr}.` });
         }
 
         // --- VALIDACIÓN 2: ¿HAY SOLAPAMIENTO CON OTROS TURNOS? ---
